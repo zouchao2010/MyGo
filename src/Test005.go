@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
+	"encoding/hex"
 )
 
 const (
 	KEYS string = "key"
 	NULL byte   = 0x00
+	StrTable string = "0123456789abcdef"
 )
 
 func byteArrayKey() []byte {
@@ -60,41 +62,50 @@ func btea(v []int, n int, k []int) {
 			e := ((_sum & 0xffffffff) >> 2) & 3
 			for p := n - 1; p > 0; p-- {
 				z := v[p-1]
-				v[p] = v[p] - (((z >> 5) ^ (y << 2)) + ((y >> 3) ^ (z << 4)) ^ (_sum ^ y) + (k[(p&3)^e] ^ z))
+				v[p] = v[p] - (((z>>5^y<<2) + (y>>3^z<<4)) ^ ((_sum^y) + (k[(p&3)^e] ^ z)))
 				v[p] &= 0xFFFFFFFF
 				y = v[p]
 			}
 			z := v[n-1]
-			v[0] = v[0] - (((z >> 5) ^ (y << 2)) + ((y >> 3) ^ (z << 4)) ^ (_sum ^ y) + (k[(0&3)^e] ^ z))
+			v[0] = v[0] - (((z>>5^y<<2) + (y>>3^z<<4)) ^ ((_sum^y) + (k[(0&3)^e] ^ z)))
 			v[0] &= 0xFFFFFFFF
 			y = v[0]
-			_sum = _sum - DELTA*q
+			_sum = _sum - DELTA
 		}
 	}
 }
 func longs2byteArray(s []int)([]byte){
+	var result []byte
 	length :=len(s)
-	fmt.Println("length...........",length)
-	var result [length*4]byte
-	fmt.Println("result...........",result)
-	var result3 [10]byte
-	fmt.Println("result3..........",result3)
+	for i:=0; i<length;i++{
+		v:=s[i]
+		result=append(result,byte(v&0xFF))
+		result=append(result,byte(v>>8&0xFF))
+		result=append(result,byte(v>>16&0xFF))
+		result=append(result,byte(v>>24&0xFF))
+	}
+	return result
 
-//	for i:=0; i<length;i++{
-//		v:=s[i]
-//		result[i*4]=v&0xFF
-//		result[i*4+1]=v>>8&0xFF
-//		result[i*4+2]=v>>16&0xFF
-//		result[i*4+3]=v>>24&0xFF
-//	}
-	var result2 []byte
-//	for i:=0; i<len(result);i++{
+//	var result2 []byte
+//	length2 :=len(result)
+//	for i:=0; i<length2;i++{
 //		if result[i]!=NULL{
-//			append(result2,result[i])
+//			result2=append(result2,result[i])
 //		}
 //	}
-	return result2
-
+//	fmt.Println("longs2byteArray..........result2.....",result2)
+//	return result2
+}
+func byteArray2Hex(s []byte)(string){
+	result := ""
+	for i:=0; i<len(s);i++{
+		result += string(StrTable[s[i]>>4]) + string(StrTable[s[i]&0xF])
+	}
+	return result
+}
+func hex2ByteArray(s string)([]byte){
+	result,_:=hex.DecodeString(s)
+	return result
 }
 func encrypt(str string)(string) {
 	byteKey := byteArrayKey()
@@ -102,28 +113,44 @@ func encrypt(str string)(string) {
 	v := byteArray2longs(byteStr)
 	k := byteArray2longs(byteKey)
 	var n int = len(v)
-	//	fmt.Println(v)
-	//	fmt.Println(k)
-	fmt.Println("n..1.", n)
-	fmt.Println("v..1.", v)
-	fmt.Println("k..1.", k)
 	btea(v, n, k)
-	fmt.Println("n..2.", n)
-	fmt.Println("v..2.", v)
-	fmt.Println("k..2.", k)
-	result := string(longs2byteArray(v))
+	result := longs2byteArray(v)
+	result2 := byteArray2Hex(result)
+	return result2
+}
+func decrypt(str string)(string) {
+	byteStr:=hex2ByteArray(str)
+	byteKey := byteArrayKey()
+	v := byteArray2longs(byteStr)
+	k := byteArray2longs(byteKey)
+	n := len(v)
 
-	return result
+	btea(v, -n, k)
+	result := longs2byteArray(v)
+	result2 := string(result)
+	return result2
 
 }
 
 func main() {
-	sr := "i love you, ccc"
-	enc := encrypt(sr)
-	print(enc)
-//	var dec = decrypt(enc)
-
+	for i:=0; i<10000000;i++{
+		sr := "i love you, ccc"
+		enc := encrypt(sr)
+		decrypt(enc)
+		if (i%10000==0){
+			fmt.Println(i)
+		}
+	}
 }
+//func main() {
+//	sr := "i love you, ccc"
+//	enc := encrypt(sr)
+//	fmt.Println("sr...", sr)
+//	fmt.Println("enc...", enc)
+//	var dec = decrypt(enc)
+//	fmt.Println("dec...", dec)
+//
+//}
 
 func test(){
 	z:=6513507
@@ -135,5 +162,18 @@ func test(){
 //	t:=( (((z & 0xffffffff)>>5)^(y<<2)) + (((y & 0xffffffff)>>3)^(z<<4))^(_sum^y) + (k[(p & 3)^e]^z) )
 	t:=(((z>>5^y<<2) + (y>>3^z<<4)) ^ ((_sum^y) + (k[(p&3)^e] ^ z)))
 	fmt.Println(t)
+}
 
+func test2(){
+	z:=3209463300
+	y:=2490911036
+	_sum:=50434279611
+	k:=[]int{7955819, 0, 0, 0}
+	p:=3
+	e:=2
+	t:= (((z>>5^y<<2) + (y>>3^z<<4)) ^ ((_sum^y) + (k[(p&3)^e] ^ z)))
+//	t:=( (((z & 0xffffffff)>>5)^(y<<2)) + (((y & 0xffffffff)>>3)^(z<<4))^(_sum^y) + (k[(p & 3)^e]^z) )
+//	t:=( (((z)>>5)^(y<<2)) + (((y )>>3)^(z<<4))^(_sum^y) + (k[(p & 3)^e]^z) )
+	fmt.Println(t)
+	fmt.Println((2615921304-25028488620)& 0xFFFFFFFF)
 }
